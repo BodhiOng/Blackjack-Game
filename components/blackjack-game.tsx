@@ -8,10 +8,10 @@ import { Controls } from "./controls"
 import { BetControls } from "./bet-controls"
 import { Banner } from "./banner"
 import { BalanceDisplay } from "./balance-display"
-import { ProvablyFairButton } from "./provably-fair-button"
 import { ProvablyFairModal } from "./provably-fair-modal"
 import type { ClientGameState, ClientCardType, GameState, GameResult } from "@/lib/types"
 import { initializeGame, placeBet, playerHit, playerStand, newRound } from "@/app/api/game/actions"
+import { Check } from "lucide-react"
 
 export default function BlackjackGame() {
   const [gameState, setGameState] = useState<GameState>("betting")
@@ -38,6 +38,7 @@ export default function BlackjackGame() {
     nonce: number
     completed: boolean
   } | null>(null)
+  const [isMobile, setIsMobile] = useState(false)
 
   // Initialize game on first load
   useEffect(() => {
@@ -357,11 +358,41 @@ export default function BlackjackGame() {
     setIsProvablyFairModalOpen(!isProvablyFairModalOpen)
   }
 
-  return (
-    <div className="flex flex-col items-center justify-between w-full max-w-3xl bg-black rounded-xl shadow-2xl overflow-hidden h-full relative">
-      <div className="w-full flex flex-col items-center justify-between p-4 relative h-full">
+  // Check for mobile view
+  useEffect(() => {
+    const checkIfMobile = () => {
+      setIsMobile(window.innerWidth < 768) // 768px is a common breakpoint for tablets
+    }
+    
+    // Initial check
+    checkIfMobile()
+    
+    // Add event listener for window resize
+    window.addEventListener('resize', checkIfMobile)
+    
+    // Cleanup
+    return () => window.removeEventListener('resize', checkIfMobile)
+  }, [])
+
+  // Mobile view component
+  const MobileView = () => (
+    <div className="flex flex-col items-center justify-between w-full h-full bg-gradient-to-b from-gray-900 to-black overflow-hidden relative">
+      <div className="w-full flex flex-col items-center justify-between p-3 relative h-full">
         {/* Balance display at the top */}
-        <BalanceDisplay balance={balance} previousBalance={previousBalance} />
+        <div className="w-full flex justify-between items-center mb-2">
+          <div className="w-1/2 flex justify-start">
+            <BalanceDisplay balance={balance} previousBalance={previousBalance} />
+          </div>
+          <div className="w-1/2 flex justify-end">
+            <button
+              onClick={toggleProvablyFairModal}
+              className="bg-gray-900 hover:bg-gray-800 text-gray-400 hover:text-white text-sm font-medium py-1 px-2 rounded-md flex items-center transition-all"
+            >
+              Provably Fair
+              <Check size={14} className="ml-1 text-green-500" />
+            </button>
+          </div>
+        </div>
 
         {/* Game message */}
         <AnimatePresence>
@@ -370,7 +401,7 @@ export default function BlackjackGame() {
               initial={{ opacity: 0, y: -20 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0 }}
-              className="absolute top-4 left-1/2 transform -translate-x-1/2 z-50 bg-black/80 text-white px-6 py-3 rounded-full font-bold text-lg"
+              className="absolute top-12 left-1/2 transform -translate-x-1/2 z-50 bg-black/90 text-white px-4 py-2 rounded-full font-bold text-sm shadow-lg"
             >
               {message}
             </motion.div>
@@ -396,22 +427,21 @@ export default function BlackjackGame() {
         </div>
 
         {/* Controls */}
-        {gameState === "betting" || gameState === "gameOver" ? (
-          <BetControls
-            bet={bet}
-            setBet={handleBetChange}
-            balance={balance}
-            onStartGame={startGame}
-            isDealing={isDealing}
-            isPostGame={gameState === "gameOver"}
-          />
-        ) : (
-          <Controls onHit={hit} onStand={stand} isDealing={isDealing} />
-        )}
+        <div className="w-full mt-2 flex justify-center flex-col items-center">
+          {gameState === "betting" || gameState === "gameOver" ? (
+            <BetControls
+              bet={bet}
+              setBet={handleBetChange}
+              balance={balance}
+              onStartGame={startGame}
+              isDealing={isDealing}
+              isPostGame={gameState === "gameOver"}
+            />
+          ) : (
+            <Controls onHit={hit} onStand={stand} isDealing={isDealing} />
+          )}
+        </div>
       </div>
-
-      {/* Provably Fair Button */}
-      <ProvablyFairButton onClick={toggleProvablyFairModal} />
 
       {/* Provably Fair Modal */}
       <ProvablyFairModal
@@ -421,4 +451,85 @@ export default function BlackjackGame() {
       />
     </div>
   )
+
+  // Desktop view component
+  const DesktopView = () => (
+    <div className="flex flex-col items-center justify-between w-full max-w-4xl bg-gradient-to-b from-gray-900 to-black rounded-xl shadow-2xl overflow-hidden h-full relative border border-gray-800">
+      <div className="w-full flex flex-col items-center justify-between p-6 relative h-full">
+        {/* Balance display at the top */}
+        <div className="w-full flex justify-between items-center mb-4">
+          <div className="w-1/3"></div> {/* Spacer for alignment */}
+          <div className="w-1/3 flex justify-center">
+            <BalanceDisplay balance={balance} previousBalance={previousBalance} />
+          </div>
+          <div className="w-1/3 flex justify-end">
+            <button
+              onClick={toggleProvablyFairModal}
+              className="bg-gray-900 hover:bg-gray-800 text-gray-400 hover:text-white text-sm font-medium py-1.5 px-3 rounded-md flex items-center transition-all"
+            >
+              Provably Fair
+              <Check size={16} className="ml-1 text-green-500" />
+            </button>
+          </div>
+        </div>
+
+        {/* Game message */}
+        <AnimatePresence>
+          {message && (
+            <motion.div
+              initial={{ opacity: 0, y: -20 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0 }}
+              className="absolute top-16 left-1/2 transform -translate-x-1/2 z-50 bg-black/90 text-white px-8 py-3 rounded-full font-bold text-lg shadow-lg border border-green-500"
+            >
+              {message}
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {/* Fixed height container for the game area to prevent layout shifts */}
+        <div className="w-full flex flex-col items-center justify-between flex-grow bg-gradient-to-b from-green-900/20 to-green-800/10 rounded-xl p-4">
+          {/* Dealer section */}
+          <Dealer
+            cards={dealerCards}
+            score={dealerScore}
+            showScore={gameState === "dealerTurn" || gameState === "gameOver"}
+            result={gameResult}
+            playerDrawing={playerDrawing}
+          />
+
+          {/* Banner */}
+          <Banner />
+
+          {/* Player section */}
+          <Player cards={playerCards} score={playerScore} result={gameResult} />
+        </div>
+
+        {/* Controls */}
+        <div className="w-full mt-6 flex justify-center">
+          {gameState === "betting" || gameState === "gameOver" ? (
+            <BetControls
+              bet={bet}
+              setBet={handleBetChange}
+              balance={balance}
+              onStartGame={startGame}
+              isDealing={isDealing}
+              isPostGame={gameState === "gameOver"}
+            />
+          ) : (
+            <Controls onHit={hit} onStand={stand} isDealing={isDealing} />
+          )}
+        </div>
+      </div>
+
+      {/* Provably Fair Modal */}
+      <ProvablyFairModal
+        isOpen={isProvablyFairModalOpen}
+        onClose={() => setIsProvablyFairModalOpen(false)}
+        gameData={provablyFairData}
+      />
+    </div>
+  )
+
+  return isMobile ? <MobileView /> : <DesktopView />
 }

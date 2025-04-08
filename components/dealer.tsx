@@ -33,9 +33,9 @@ export function Dealer({ cards, score, showScore, result = null, playerDrawing =
   return (
     <div className="w-full flex flex-col items-center justify-center h-[25%] relative">
       {/* Score bubble container with fixed height to prevent layout shifts */}
-      <div className="h-8 flex items-center justify-center mb-2">
+      <div className="h-8 flex items-center justify-center mb-4">
         {score > 0 ? (
-          <div className="px-4 py-1 rounded-full text-white text-base font-medium bg-gray-800/80 z-10">
+          <div className="px-4 py-2 rounded-full text-white text-base font-medium bg-gray-800/80 z-10">
             {showScore ? score : "?"}
           </div>
         ) : (
