@@ -5,7 +5,7 @@ import { v4 as uuidv4 } from "uuid"
 import { generateShuffledDeck as generateProvablyFairDeck } from "./provably-fair"
 
 // Initialize or shuffle deck
-export function createDeck(): CardType[] {
+export async function createDeck(): Promise<CardType[]> {
   const suits: Suit[] = ["hearts", "diamonds", "clubs", "spades"]
   const ranks: Rank[] = ["A", "2", "3", "4", "5", "6", "7", "8", "9", "10", "J", "Q", "K"]
   const newDeck: CardType[] = []
@@ -26,7 +26,7 @@ export function createDeck(): CardType[] {
 }
 
 // Create a deck using provably fair algorithm
-export function createProvablyFairDeck(serverSeed: string, clientSeed: string): CardType[] {
+export async function createProvablyFairDeck(serverSeed: string, clientSeed: string): Promise<CardType[]> {
   const suits: Suit[] = ["hearts", "diamonds", "clubs", "spades"]
   const ranks: Rank[] = ["A", "2", "3", "4", "5", "6", "7", "8", "9", "10", "J", "Q", "K"]
 
@@ -39,7 +39,7 @@ export function createProvablyFairDeck(serverSeed: string, clientSeed: string): 
   }
 
   // Get the provably fair shuffle indices
-  const shuffleIndices = generateProvablyFairDeck(serverSeed, clientSeed)
+  const shuffleIndices = await generateProvablyFairDeck(serverSeed, clientSeed)
 
   // Create the shuffled deck
   const shuffledDeck: CardType[] = []
@@ -51,7 +51,7 @@ export function createProvablyFairDeck(serverSeed: string, clientSeed: string): 
 }
 
 // Calculate score of cards
-export function calculateScore(cards: CardType[]): number {
+export async function calculateScore(cards: CardType[]): Promise<number> {
   let score = 0
   let aces = 0
 
@@ -78,12 +78,12 @@ export function calculateScore(cards: CardType[]): number {
 }
 
 // Convert server cards to client cards (hiding information as needed)
-export function convertToClientCards(
+export async function convertToClientCards(
   cards: CardType[],
   markNewCard = false,
   isInitialDeal = false,
   isDealer = false,
-): ClientCardType[] {
+): Promise<ClientCardType[]> {
   // If markNewCard is true, only mark the last card as new
   const result = cards.map((card, index) => {
     const isLastCard = index === cards.length - 1
@@ -121,9 +121,9 @@ export function convertToClientCards(
 }
 
 // Determine game result
-export function determineGameResult(playerCards: CardType[], dealerCards: CardType[]): GameResult {
-  const playerScore = calculateScore(playerCards)
-  const dealerScore = calculateScore(dealerCards)
+export async function determineGameResult(playerCards: CardType[], dealerCards: CardType[]): Promise<GameResult> {
+  const playerScore = await calculateScore(playerCards)
+  const dealerScore = await calculateScore(dealerCards)
 
   if (playerScore > 21) {
     return "bust"
@@ -152,7 +152,7 @@ export function determineGameResult(playerCards: CardType[], dealerCards: CardTy
 }
 
 // Calculate payout based on result
-export function calculatePayout(bet: number, result: GameResult): number {
+export async function calculatePayout(bet: number, result: GameResult): Promise<number> {
   switch (result) {
     case "playerWin":
     case "dealerBust":
@@ -165,4 +165,3 @@ export function calculatePayout(bet: number, result: GameResult): number {
       return 0 // Player loses
   }
 }
-

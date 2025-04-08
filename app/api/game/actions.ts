@@ -57,15 +57,21 @@ async function createClientGameState(
       }
     : undefined
 
+  // Convert cards and calculate scores
+  const dealerCards = await convertToClientCards(session.dealerCards, markNewCard, isInitialDeal, true)
+  const playerCards = await convertToClientCards(session.playerCards, markNewCard, isInitialDeal, false)
+  const dealerScore = await calculateScore(session.dealerCards.map((card) => (card.hidden ? { ...card, hidden: false } : card)))
+  const playerScore = await calculateScore(session.playerCards)
+
   return {
     sessionId: session.id,
-    dealerCards: convertToClientCards(session.dealerCards, markNewCard, isInitialDeal, true),
-    playerCards: convertToClientCards(session.playerCards, markNewCard, isInitialDeal, false),
+    dealerCards,
+    playerCards,
     gameState: session.gameState,
     balance: session.balance,
     bet: session.bet,
-    dealerScore: calculateScore(session.dealerCards.map((card) => (card.hidden ? { ...card, hidden: false } : card))),
-    playerScore: calculateScore(session.playerCards),
+    dealerScore,
+    playerScore,
     gameResult: session.gameResult,
     message: "",
     provablyFair: provablyFairData,
@@ -75,13 +81,14 @@ async function createClientGameState(
 // Initialize a new game
 export async function initializeGame(initialBalance = 1000): Promise<ClientGameState> {
   // Clear any existing session
-  cookies().delete("blackjack_session")
+  const cookieStore = await cookies()
+  cookieStore.delete("blackjack_session")
 
   // Create provably fair data
   const gameId = uuidv4()
-  const serverSeed = generateSeed(32)
-  const hashedServerSeed = hashSeed(serverSeed)
-  const clientSeed = generateSeed(16)
+  const serverSeed = await generateSeed(32)
+  const hashedServerSeed = await hashSeed(serverSeed)
+  const clientSeed = await generateSeed(16)
   const nonce = 0
 
   const provablyFairData: ProvablyFairData = {
@@ -107,7 +114,7 @@ export async function initializeGame(initialBalance = 1000): Promise<ClientGameS
 
   await createSession(session)
   logSessionState("initializeGame", session)
-  return createClientGameState(session)
+  return await createClientGameState(session)
 }
 
 // Place a bet and start the game
@@ -119,9 +126,9 @@ export async function placeBet(bet: number, sessionId?: string): Promise<ClientG
   if (!session && sessionId) {
     // Create provably fair data
     const gameId = uuidv4()
-    const serverSeed = generateSeed(32)
-    const hashedServerSeed = hashSeed(serverSeed)
-    const clientSeed = generateSeed(16)
+    const serverSeed = await generateSeed(32)
+    const hashedServerSeed = await hashSeed(serverSeed)
+    const clientSeed = await generateSeed(16)
     const nonce = 0
 
     const provablyFairData: ProvablyFairData = {
@@ -139,117 +146,60 @@ export async function placeBet(bet: number, sessionId?: string): Promise<ClientG
       dealerCards: [],
       playerCards: [],
       gameState: "betting",
-      balance: 1000, // Default balance
+      balance: 1000,
       bet: 0,
       gameResult: null,
       provablyFair: provablyFairData,
     }
+
     await createSession(session)
   }
 
   if (!session) {
-    // If still no session, create a new one
+    // If no session, create a new one
     return initializeGame()
   }
 
-  // Make sure we're in betting state
-  if (session.gameState !== "betting") {
-    session.gameState = "betting"
-    session.dealerCards = []
-    session.playerCards = []
-    session.gameResult = null
-
-    // Create new provably fair data for the new game
-    if (session.provablyFair) {
-      const gameId = uuidv4()
-      const serverSeed = generateSeed(32)
-      const hashedServerSeed = hashSeed(serverSeed)
-      const clientSeed = generateSeed(16)
-      const nonce = 0
-
-      session.provablyFair = {
-        gameId,
-        serverSeed,
-        hashedServerSeed,
-        clientSeed,
-        nonce,
-        completed: false,
-      }
-    }
-
-    await updateSession(session)
-  }
-
-  if (bet <= 0) {
+  // Validate bet amount
+  if (bet <= 0 || bet > session.balance) {
     return {
       ...(await createClientGameState(session)),
-      message: "Please place a bet",
+      message: "Invalid bet amount",
     }
   }
 
-  if (bet > session.balance) {
-    return {
-      ...(await createClientGameState(session)),
-      message: "You don't have enough balance for this bet",
-    }
-  }
-
-  // Deduct bet from balance
-  session.balance -= bet
-  session.bet = bet
-
-  // Reset game state
-  session.gameResult = null
-
-  // Create a provably fair deck if we have provably fair data
+  // Create a new deck for this game
   if (session.provablyFair) {
-    session.deck = createProvablyFairDeck(session.provablyFair.serverSeed, session.provablyFair.clientSeed)
+    // Use provably fair deck generation
+    const provablyFairDeck = await createProvablyFairDeck(
+      session.provablyFair.serverSeed,
+      session.provablyFair.clientSeed,
+    )
+    session.deck = provablyFairDeck
   } else {
-    session.deck = createDeck()
+    // Use regular deck generation
+    const regularDeck = await createDeck()
+    session.deck = regularDeck
   }
 
-  session.dealerCards = []
-  session.playerCards = []
+  // Deal initial cards
+  session.dealerCards = [
+    session.deck.pop()!,
+    { ...session.deck.pop()!, hidden: true }, // Second dealer card is hidden
+  ]
+  session.playerCards = [session.deck.pop()!, session.deck.pop()!]
 
-  // Deal initial cards - in the correct sequence
-  const dealerCard1 = session.deck.pop()! // First card to dealer (face up)
-  const playerCard1 = session.deck.pop()! // First card to player (face up)
-  const dealerCard2 = { ...session.deck.pop()!, hidden: true } // Second card to dealer (face down)
-  const playerCard2 = session.deck.pop()! // Second card to player (face up)
-
-  session.dealerCards = [dealerCard1, dealerCard2]
-  session.playerCards = [playerCard1, playerCard2]
-
-  // Check for blackjack
-  const playerScore = calculateScore(session.playerCards)
-  if (playerScore === 21) {
-    // Reveal dealer's hidden card
-    session.dealerCards = session.dealerCards.map((card) => ({ ...card, hidden: false }))
-    const dealerScore = calculateScore(session.dealerCards)
-
-    if (dealerScore === 21) {
-      session.gameResult = "push"
-      session.balance += bet // Return bet on push
-    } else {
-      session.gameResult = "blackjack"
-      session.balance += calculatePayout(bet, "blackjack")
-    }
-
-    session.gameState = "gameOver"
-
-    // Mark the game as completed for provably fair verification
-    if (session.provablyFair) {
-      session.provablyFair.completed = true
-    }
-  } else {
-    session.gameState = "playing"
-  }
+  // Update game state
+  session.gameState = "playing"
+  session.bet = bet
+  session.balance -= bet
+  session.gameResult = null
 
   await updateSession(session)
   logSessionState("placeBet-after", session)
 
-  // Mark this as an initial deal for proper sequencing
-  return createClientGameState(session, false, true)
+  // Return initial game state with animation flags for initial deal
+  return await createClientGameState(session, false, true)
 }
 
 // Player hits (takes another card)
@@ -257,9 +207,7 @@ export async function playerHit(sessionId?: string): Promise<ClientGameState> {
   const session = await getSession()
   logSessionState("playerHit-before", session)
 
-  // If no session found but sessionId is provided, try to recover
-  if (!session && sessionId) {
-    // Create a new session with the provided ID
+  if (!session) {
     return {
       sessionId: "",
       dealerCards: [],
@@ -274,45 +222,31 @@ export async function playerHit(sessionId?: string): Promise<ClientGameState> {
     }
   }
 
-  if (!session) {
-    // If no session, create a new one
-    return initializeGame()
-  }
-
-  // Force the game state to playing if it's not already
+  // Validate game state
   if (session.gameState !== "playing") {
-    if (session.playerCards.length > 0 && session.dealerCards.length > 0 && !session.gameResult) {
-      session.gameState = "playing"
-      await updateSession(session)
-    } else {
-      return {
-        ...(await createClientGameState(session)),
-        message: "Invalid game state for hit action. Please start a new game.",
-      }
+    return {
+      ...(await createClientGameState(session)),
+      message: "Invalid game state for hit action",
     }
   }
 
-  // Draw a card from the deck
+  // Draw a card
   const newCard = session.deck.pop()!
   session.playerCards.push(newCard)
 
-  // Check if player busts
-  const playerScore = calculateScore(session.playerCards)
+  // Check for bust
+  const playerScore = await calculateScore(session.playerCards)
   if (playerScore > 21) {
-    session.gameResult = "bust"
     session.gameState = "gameOver"
-
-    // Mark the game as completed for provably fair verification
-    if (session.provablyFair) {
-      session.provablyFair.completed = true
-    }
+    session.gameResult = "bust"
+    // No payout needed for bust
   }
 
   await updateSession(session)
   logSessionState("playerHit-after", session)
 
-  // Mark the new card for animation - only for player
-  return createClientGameState(session, true)
+  // Return the new state with the new card marked for animation
+  return await createClientGameState(session, true)
 }
 
 // Player stands (dealer's turn)
@@ -320,9 +254,7 @@ export async function playerStand(sessionId?: string): Promise<ClientGameState> 
   const session = await getSession()
   logSessionState("playerStand-before", session)
 
-  // If no session found but sessionId is provided, try to recover
-  if (!session && sessionId) {
-    // Create a new session with the provided ID
+  if (!session) {
     return {
       sessionId: "",
       dealerCards: [],
@@ -335,11 +267,6 @@ export async function playerStand(sessionId?: string): Promise<ClientGameState> 
       gameResult: null,
       message: "Session expired. Please start a new game.",
     }
-  }
-
-  if (!session) {
-    // If no session, create a new one
-    return initializeGame()
   }
 
   // Force the game state to playing if it has valid cards but wrong state
@@ -363,7 +290,7 @@ export async function playerStand(sessionId?: string): Promise<ClientGameState> 
   await updateSession(session)
 
   // Dealer draws cards until score is 17 or higher
-  let dealerScore = calculateScore(session.dealerCards)
+  let dealerScore = await calculateScore(session.dealerCards)
   let lastGameState = await createClientGameState(session, true)
 
   while (dealerScore < 17) {
@@ -374,22 +301,19 @@ export async function playerStand(sessionId?: string): Promise<ClientGameState> 
     await updateSession(session)
 
     // Get the updated dealer score
-    dealerScore = calculateScore(session.dealerCards)
+    dealerScore = await calculateScore(session.dealerCards)
 
     // Return the intermediate state with the new card marked for animation
     lastGameState = await createClientGameState(session, true)
-
-    // In a real implementation, we would return this state and wait for the client
-    // to request the next card. For simplicity, we're just updating the last state.
   }
 
   // Determine game result
-  session.gameResult = determineGameResult(session.playerCards, session.dealerCards)
+  session.gameResult = await determineGameResult(session.playerCards, session.dealerCards)
   session.gameState = "gameOver"
 
   // Update balance based on result
   if (session.gameResult !== "dealerWin" && session.gameResult !== "bust") {
-    session.balance += calculatePayout(session.bet, session.gameResult)
+    session.balance += await calculatePayout(session.bet, session.gameResult)
   }
 
   // Mark the game as completed for provably fair verification
@@ -401,7 +325,7 @@ export async function playerStand(sessionId?: string): Promise<ClientGameState> 
   logSessionState("playerStand-after", session)
 
   // Return the final state
-  return createClientGameState(session, false)
+  return await createClientGameState(session, false)
 }
 
 // Start a new round (after game over)
@@ -444,9 +368,9 @@ export async function newRound(sessionId?: string): Promise<ClientGameState> {
   // Create new provably fair data for the new game
   if (session.provablyFair) {
     const gameId = uuidv4()
-    const serverSeed = generateSeed(32)
-    const hashedServerSeed = hashSeed(serverSeed)
-    const clientSeed = generateSeed(16)
+    const serverSeed = await generateSeed(32)
+    const hashedServerSeed = await hashSeed(serverSeed)
+    const clientSeed = await generateSeed(16)
     const nonce = 0
 
     session.provablyFair = {
@@ -471,4 +395,3 @@ export async function newRound(sessionId?: string): Promise<ClientGameState> {
     bet: currentBet, // This helps the client remember the last bet
   }
 }
-
