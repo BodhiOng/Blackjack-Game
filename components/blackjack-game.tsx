@@ -20,6 +20,7 @@ export default function BlackjackGame() {
   const [bet, setBet] = useState(0)
   const [lastBet, setLastBet] = useState(0) // Track the last bet for easy replay
   const [balance, setBalance] = useState(1000)
+  const [previousBalance, setPreviousBalance] = useState<number | undefined>(undefined)
   const [message, setMessage] = useState("")
   const [dealerScore, setDealerScore] = useState(0)
   const [playerScore, setPlayerScore] = useState(0)
@@ -68,6 +69,9 @@ export default function BlackjackGame() {
     setPlayerCards(gameState.playerCards)
 
     setGameState(gameState.gameState)
+    
+    // Track previous balance before updating to new balance
+    setPreviousBalance(balance)
     setBalance(gameState.balance)
 
     // Only update bet if it's not a game over state
@@ -357,7 +361,7 @@ export default function BlackjackGame() {
     <div className="flex flex-col items-center justify-between w-full max-w-3xl bg-black rounded-xl shadow-2xl overflow-hidden h-full relative">
       <div className="w-full flex flex-col items-center justify-between p-4 relative h-full">
         {/* Balance display at the top */}
-        <BalanceDisplay balance={balance} />
+        <BalanceDisplay balance={balance} previousBalance={previousBalance} />
 
         {/* Game message */}
         <AnimatePresence>
@@ -418,4 +422,3 @@ export default function BlackjackGame() {
     </div>
   )
 }
-
