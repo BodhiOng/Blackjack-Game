@@ -63,10 +63,10 @@ export default function BlackjackGame() {
     console.log("Updating client state:", gameState)
     setSessionId(gameState.sessionId)
 
-    // Update dealer cards, preserving the isNew flag
+    // Update dealer cards, preserving the hidden flag
     setDealerCards(gameState.dealerCards)
 
-    // Update player cards, preserving the isNew flag
+    // Update player cards, preserving the hidden flag
     setPlayerCards(gameState.playerCards)
 
     setGameState(gameState.gameState)
@@ -116,15 +116,23 @@ export default function BlackjackGame() {
   }
 
   // Place bet and start game
-  const startGame = async () => {
-    if (bet <= 0) {
+  const startGame = async (betAmount?: number) => {
+    // Use the passed betAmount if provided, otherwise use the state value
+    const currentBet = betAmount !== undefined ? betAmount : bet
+    
+    if (currentBet <= 0) {
       setMessage("Please place a bet")
       return
     }
 
-    if (bet > balance) {
+    if (currentBet > balance) {
       setMessage("You don't have enough balance for this bet")
       return
+    }
+
+    // Update the bet state if it was passed as a parameter
+    if (betAmount !== undefined) {
+      setBet(currentBet)
     }
 
     setIsDealing(true)
@@ -138,7 +146,7 @@ export default function BlackjackGame() {
       }
 
       // Pass the sessionId to help recover if session is lost
-      const newGameState = await placeBet(bet, sessionId || undefined)
+      const newGameState = await placeBet(currentBet, sessionId || undefined)
       updateGameStateFromServer(newGameState)
     } catch (error) {
       console.error("Failed to place bet:", error)
@@ -158,150 +166,138 @@ export default function BlackjackGame() {
 
   // Player hits (takes another card)
   const hit = async () => {
-    if (isDealing) return
+    if (gameState !== "playing") {
+      return
+    }
 
     setIsDealing(true)
-    setPlayerDrawing(true) // Set flag that player is drawing
+    setPlayerDrawing(true)
+    setMessage("")
 
     try {
-      // Add a small delay before drawing the card
-      await new Promise((resolve) => setTimeout(resolve, 200))
-
       const newGameState = await playerHit(sessionId || undefined)
       updateGameStateFromServer(newGameState)
 
-      // Keep the player drawing flag active for a moment to prevent dealer card animation
-      setTimeout(() => {
-        setPlayerDrawing(false)
-      }, 500)
+      // If player busts, show result after a short delay
+      if (newGameState.gameResult === "bust") {
+        setTimeout(() => {
+          setGameResult("bust")
+        }, 1000)
+      }
     } catch (error) {
       console.error("Failed to hit:", error)
       setMessage("Failed to hit. Please try again.")
-      setPlayerDrawing(false)
 
-      // Try to recover by starting a new game
-      if (message.includes("Session expired") || message.includes("Invalid game state")) {
-        try {
-          const newGameState = await initializeGame(balance)
-          updateGameStateFromServer(newGameState)
-        } catch (reinitError) {
-          console.error("Failed to reinitialize game:", reinitError)
-        }
+      // If we get an error, try to reinitialize the game
+      try {
+        const newGameState = await initializeGame(balance)
+        updateGameStateFromServer(newGameState)
+      } catch (reinitError) {
+        console.error("Failed to reinitialize game:", reinitError)
       }
     } finally {
       setIsDealing(false)
+      setPlayerDrawing(false)
     }
   }
 
   // Player stands (dealer's turn)
   const stand = async () => {
-    if (isDealing) return
+    if (gameState !== "playing") {
+      return
+    }
 
     setIsDealing(true)
-    setPlayerDrawing(false) // Reset flag when standing
+    setMessage("")
 
     try {
-      // Step 1: Initial delay after clicking stand
-      setMessage("") // Clear any existing messages
-      await new Promise((resolve) => setTimeout(resolve, 800))
+      const initialGameState = await playerStand(sessionId || undefined)
+      updateGameStateFromServer(initialGameState)
 
-      // Step 2: Get the game state from the server
-      const newGameState = await playerStand(sessionId || undefined)
+      // Simulate dealer drawing cards one by one
+      if (initialGameState.gameState === "dealerTurn") {
+        let currentDealerCards = [...initialGameState.dealerCards]
+        let currentDealerScore = calculateDealerScore(currentDealerCards)
 
-      // Step 3: Reveal dealer's hidden card with a visual delay
-      // First, create a copy of the dealer's cards with the hidden card still hidden
-      const initialDealerCards = [...dealerCards]
+        // Process each dealer card with a delay
+        for (let i = 1; i < initialGameState.dealerCards.length; i++) {
+          // Skip the first card which is already revealed
+          if (i <= 1) continue
 
-      // Then, reveal the hidden card with animation
-      if (initialDealerCards.length >= 2 && initialDealerCards[1].hidden) {
-        // Find the hidden card in the dealer's hand
-        const revealedCards = initialDealerCards.map((card, index) => {
-          if (card.hidden) {
-            // Find the matching revealed card from the server response
-            const revealedCard = newGameState.dealerCards.find((c, i) => i === index)
-            if (revealedCard) {
-              return {
-                ...card,
-                hidden: false,
-                suit: revealedCard.suit,
-                rank: revealedCard.rank,
-                isNew: false,
-              }
-            }
-          }
-          return card
-        })
-
-        // Update the UI to show the revealed card
-        setDealerCards(revealedCards)
-        setDealerScore(newGameState.dealerScore)
-
-        // Pause to let the player see the revealed card
-        await new Promise((resolve) => setTimeout(resolve, 1000))
-      }
-
-      // Step 4: Check if the game is over (blackjack, bust, etc.)
-      if (newGameState.gameState === "gameOver") {
-        updateGameStateFromServer(newGameState)
-        setIsDealing(false)
-        return
-      }
-
-      // Step 5: If dealer needs to draw more cards (score < 17)
-      if (newGameState.dealerScore < 17) {
-        // Start with the current dealer cards and score
-        let currentDealerCards = [...dealerCards]
-        let currentDealerScore = newGameState.dealerScore
-
-        // Get all the additional cards the dealer will draw from the server response
-        const additionalCards = newGameState.dealerCards.slice(currentDealerCards.length)
-
-        // Draw each card one by one with delays
-        for (let i = 0; i < additionalCards.length; i++) {
-          // Pause before drawing the card
-          await new Promise((resolve) => setTimeout(resolve, 800))
-
-          // Add the new card with the isNew flag for animation
-          const newCard: ClientCardType = {
-            ...additionalCards[i],
-            isNew: true,
-          }
-
-          // Update the dealer's hand
-          currentDealerCards = [...currentDealerCards, newCard]
-          setDealerCards(currentDealerCards)
-
-          // Update the dealer's score
-          currentDealerScore = calculateDealerScore(currentDealerCards)
-          setDealerScore(currentDealerScore)
-
-          // Pause after drawing the card to let the player see it
           await new Promise((resolve) => setTimeout(resolve, 1000))
 
-          // If dealer has 17 or more, stop drawing
-          if (currentDealerScore >= 17) {
+          // Update dealer cards one by one
+          const updatedDealerCards = currentDealerCards.map((card, index) => {
+            if (index === i) {
+              return { ...card, hidden: false }
+            }
+            return card
+          })
+
+          currentDealerCards = updatedDealerCards
+          setDealerCards(updatedDealerCards)
+
+          // Update dealer score
+          currentDealerScore = calculateDealerScore(
+            updatedDealerCards.filter((card) => !card.hidden)
+          )
+          setDealerScore(currentDealerScore)
+
+          // Check if dealer busts
+          if (currentDealerScore > 21) {
+            // Dealer busts, player wins
+            setGameResult("dealerBust")
             break
           }
         }
+
+        // Final result determination after dealer finishes drawing
+        if (currentDealerScore <= 21) {
+          await new Promise((resolve) => setTimeout(resolve, 1000))
+
+          if (playerScore > currentDealerScore) {
+            // Player score is higher, player wins
+            setGameResult("playerWin")
+          } else if (playerScore < currentDealerScore) {
+            // Dealer score is higher, dealer wins
+            setGameResult("dealerWin")
+          } else {
+            // Scores are equal, it's a push
+            setGameResult("push")
+          }
+        }
+
+        // Update game state to game over after determining result
+        setGameState("gameOver")
+
+        // Update balance based on result
+        let newBalance = balance
+        if (
+          gameResult === "playerWin" ||
+          gameResult === "dealerBust" ||
+          gameResult === "blackjack"
+        ) {
+          // Player wins, add bet amount (2x for blackjack)
+          const multiplier = gameResult === "blackjack" ? 2.5 : 2
+          newBalance += bet * multiplier
+        } else if (gameResult === "push") {
+          // Push, return bet amount
+          newBalance += bet
+        }
+        // For dealer win or player bust, bet is already deducted
+
+        setBalance(newBalance)
       }
-
-      // Step 6: Final pause before showing the result
-      await new Promise((resolve) => setTimeout(resolve, 800))
-
-      // Step 7: Update with the final game state
-      updateGameStateFromServer(newGameState)
     } catch (error) {
       console.error("Failed to stand:", error)
       setMessage("Failed to stand. Please try again.")
 
-      // Try to recover by starting a new game
-      if (message.includes("Session expired") || message.includes("Invalid game state")) {
-        try {
-          const newGameState = await initializeGame(balance)
-          updateGameStateFromServer(newGameState)
-        } catch (reinitError) {
-          console.error("Failed to reinitialize game:", reinitError)
-        }
+      // If we get an error, try to reinitialize the game
+      try {
+        const newGameState = await initializeGame(balance)
+        updateGameStateFromServer(newGameState)
+      } catch (reinitError) {
+        console.error("Failed to reinitialize game:", reinitError)
       }
     } finally {
       setIsDealing(false)
@@ -310,23 +306,22 @@ export default function BlackjackGame() {
 
   // Helper function to calculate dealer score
   const calculateDealerScore = (cards: ClientCardType[]): number => {
+    const revealedCards = cards.filter((card) => !card.hidden)
     let score = 0
     let aces = 0
 
-    for (const card of cards) {
-      if (card.hidden) continue
-
+    for (const card of revealedCards) {
       if (card.rank === "A") {
         aces++
         score += 11
       } else if (["K", "Q", "J"].includes(card.rank || "")) {
         score += 10
       } else if (card.rank) {
-        score += Number.parseInt(card.rank)
+        score += parseInt(card.rank)
       }
     }
 
-    // Adjust for aces
+    // Adjust for aces if score is over 21
     while (score > 21 && aces > 0) {
       score -= 10
       aces--
@@ -352,6 +347,12 @@ export default function BlackjackGame() {
   const handleBetChange = (newBet: number) => {
     setBet(newBet)
   }
+
+  // Handle hit
+  const handleHit = hit
+
+  // Handle stand
+  const handleStand = stand
 
   // Toggle provably fair modal
   const toggleProvablyFairModal = () => {
@@ -438,7 +439,7 @@ export default function BlackjackGame() {
               isPostGame={gameState === "gameOver"}
             />
           ) : (
-            <Controls onHit={hit} onStand={stand} isDealing={isDealing} />
+            <Controls onHit={handleHit} onStand={handleStand} isDealing={isDealing} />
           )}
         </div>
       </div>
@@ -446,7 +447,7 @@ export default function BlackjackGame() {
       {/* Provably Fair Modal */}
       <ProvablyFairModal
         isOpen={isProvablyFairModalOpen}
-        onClose={() => setIsProvablyFairModalOpen(false)}
+        onClose={toggleProvablyFairModal}
         gameData={provablyFairData}
       />
     </div>
@@ -517,7 +518,7 @@ export default function BlackjackGame() {
               isPostGame={gameState === "gameOver"}
             />
           ) : (
-            <Controls onHit={hit} onStand={stand} isDealing={isDealing} />
+            <Controls onHit={handleHit} onStand={handleStand} isDealing={isDealing} />
           )}
         </div>
       </div>
@@ -525,7 +526,7 @@ export default function BlackjackGame() {
       {/* Provably Fair Modal */}
       <ProvablyFairModal
         isOpen={isProvablyFairModalOpen}
-        onClose={() => setIsProvablyFairModalOpen(false)}
+        onClose={toggleProvablyFairModal}
         gameData={provablyFairData}
       />
     </div>

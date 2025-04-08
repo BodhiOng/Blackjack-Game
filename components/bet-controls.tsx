@@ -8,7 +8,7 @@ interface BetControlsProps {
   bet: number
   setBet: (bet: number) => void
   balance: number
-  onStartGame: () => void
+  onStartGame: (betAmount?: number) => void
   isDealing: boolean
   isPostGame: boolean
 }
@@ -24,14 +24,8 @@ export function BetControls({ bet, setBet, balance, onStartGame, isDealing, isPo
   }, [bet])
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const value = e.target.value
-    setInputValue(value)
-    const numValue = Number.parseFloat(value)
-    if (!isNaN(numValue) && numValue >= 0) {
-      setBet(numValue)
-    } else {
-      setBet(0)
-    }
+    // Only update the local input value, not the actual bet
+    setInputValue(e.target.value)
   }
 
   const handleFocus = (e: React.FocusEvent<HTMLInputElement>) => {
@@ -41,12 +35,28 @@ export function BetControls({ bet, setBet, balance, onStartGame, isDealing, isPo
   }
 
   const adjustBet = (multiplier: number) => {
-    const newBet = bet * multiplier
-    setBet(newBet)
+    // Use the current input value for multiplication instead of the bet state
+    const currentValue = Number.parseFloat(inputValue) || 0
+    const newBet = currentValue * multiplier
+    // Update the local input value
     setInputValue(newBet.toFixed(2))
   }
 
-  const isValidBet = bet > 0 && bet <= balance && !isDealing
+  // Handle start game and set bet at the same time
+  const handleStartGame = () => {
+    // Parse the input value to a number
+    const numValue = Number.parseFloat(inputValue)
+    
+    // Only update the bet if it's a valid number and within balance
+    if (!isNaN(numValue) && numValue > 0 && numValue <= balance) {
+      // Pass the bet value directly to the startGame function
+      onStartGame(numValue)
+    }
+  }
+
+  // Check if the input value is a valid bet (for enabling/disabling the button)
+  const parsedValue = Number.parseFloat(inputValue)
+  const isValidBet = !isNaN(parsedValue) && parsedValue > 0 && parsedValue <= balance && !isDealing
 
   // Determine button text based on whether we're starting a new game or continuing
   const buttonText = isPostGame ? "Play Again" : "Bet"
@@ -91,7 +101,7 @@ export function BetControls({ bet, setBet, balance, onStartGame, isDealing, isPo
       </div>
 
       <button
-        onClick={onStartGame}
+        onClick={handleStartGame}
         disabled={!isValidBet}
         className={`w-full max-w-xs ${isValidBet ? "bg-green-600 hover:bg-green-500" : "bg-gray-700"} disabled:cursor-not-allowed text-white py-2 rounded-lg font-bold text-base transition-all ${isPostGame ? "animate-pulse" : ""}`}
       >
@@ -100,4 +110,3 @@ export function BetControls({ bet, setBet, balance, onStartGame, isDealing, isPo
     </div>
   )
 }
-
