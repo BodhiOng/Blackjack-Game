@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 import { motion, AnimatePresence } from "framer-motion"
 import { Dealer } from "./dealer"
 import { Player } from "./player"
@@ -12,6 +12,15 @@ import { ProvablyFairModal } from "./provably-fair-modal"
 import type { ClientGameState, ClientCardType, GameState, GameResult } from "@/lib/types"
 import { initializeGame, placeBet, playerHit, playerStand, newRound } from "@/app/api/game/actions"
 import { Check } from "lucide-react"
+import Card from "./card"
+
+interface DealerProps {
+  cards: ClientCardType[]
+  score: number
+  showScore: boolean
+  result?: "playerWin" | "dealerWin" | "push" | "bust" | "dealerBust" | "blackjack" | null
+  playerDrawing?: boolean
+}
 
 export default function BlackjackGame() {
   const [gameState, setGameState] = useState<GameState>("betting")
@@ -29,6 +38,12 @@ export default function BlackjackGame() {
   const [sessionId, setSessionId] = useState<string | null>(null)
   const [isInitialized, setIsInitialized] = useState(false)
   const [playerDrawing, setPlayerDrawing] = useState(false) // Track when player is drawing a card
+  const [isResultsVisible, setIsResultsVisible] = useState(false)
+  const [dealerCardsRevealed, setDealerCardsRevealed] = useState(0)
+  const animationCompleteRef = useRef(false);
+  const [animationQueue, setAnimationQueue] = useState<(() => void)[]>([])
+  const [isAnimating, setIsAnimating] = useState(false)
+  const [animationDelay, setAnimationDelay] = useState(0)
   const [isProvablyFairModalOpen, setIsProvablyFairModalOpen] = useState(false)
   const [provablyFairData, setProvablyFairData] = useState<{
     gameId: string
@@ -91,7 +106,18 @@ export default function BlackjackGame() {
 
     setDealerScore(gameState.dealerScore)
     setPlayerScore(gameState.playerScore)
-    setGameResult(gameState.gameResult)
+    
+    // Only update game result if we're in a game over state
+    if (gameState.gameState === "gameOver") {
+      // Store the result but don't show it yet
+      setGameResult(gameState.gameResult);
+      setIsResultsVisible(false); // Hide results initially
+      setIsAnimating(true); // Start animation tracking
+    } else {
+      setGameResult(null)
+      setIsResultsVisible(false);
+      setIsAnimating(false);
+    }
 
     if (gameState.message) {
       setMessage(gameState.message)
@@ -184,6 +210,9 @@ export default function BlackjackGame() {
           setGameResult("bust")
         }, 1000)
       }
+      
+      // Reset results visibility after player hit
+      setIsResultsVisible(false)
     } catch (error) {
       console.error("Failed to hit:", error)
       setMessage("Failed to hit. Please try again.")
@@ -203,104 +232,40 @@ export default function BlackjackGame() {
 
   // Player stands (dealer's turn)
   const stand = async () => {
-    if (gameState !== "playing") {
-      return
-    }
+    if (gameState !== "playing") return;
 
-    setIsDealing(true)
-    setMessage("")
+    setIsDealing(true);
+    setPlayerDrawing(false);
+    setDealerCardsRevealed(0);
 
     try {
-      const initialGameState = await playerStand(sessionId || undefined)
-      updateGameStateFromServer(initialGameState)
-
-      // Simulate dealer drawing cards one by one
-      if (initialGameState.gameState === "dealerTurn") {
-        let currentDealerCards = [...initialGameState.dealerCards]
-        let currentDealerScore = calculateDealerScore(currentDealerCards)
-
-        // Process each dealer card with a delay
-        for (let i = 1; i < initialGameState.dealerCards.length; i++) {
-          // Skip the first card which is already revealed
-          if (i <= 1) continue
-
-          await new Promise((resolve) => setTimeout(resolve, 1000))
-
-          // Update dealer cards one by one
-          const updatedDealerCards = currentDealerCards.map((card, index) => {
-            if (index === i) {
-              return { ...card, hidden: false }
-            }
-            return card
-          })
-
-          currentDealerCards = updatedDealerCards
-          setDealerCards(updatedDealerCards)
-
-          // Update dealer score
-          currentDealerScore = calculateDealerScore(
-            updatedDealerCards.filter((card) => !card.hidden)
-          )
-          setDealerScore(currentDealerScore)
-
-          // Check if dealer busts
-          if (currentDealerScore > 21) {
-            // Dealer busts, player wins
-            setGameResult("dealerBust")
-            break
-          }
-        }
-
-        // Final result determination after dealer finishes drawing
-        if (currentDealerScore <= 21) {
-          await new Promise((resolve) => setTimeout(resolve, 1000))
-
-          if (playerScore > currentDealerScore) {
-            // Player score is higher, player wins
-            setGameResult("playerWin")
-          } else if (playerScore < currentDealerScore) {
-            // Dealer score is higher, dealer wins
-            setGameResult("dealerWin")
+      const newGameState = await playerStand(sessionId!);
+      
+      // Update state but don't show results yet
+      updateGameStateFromServer(newGameState);
+      
+      // Show results after dealer cards are revealed
+      await new Promise(resolve => {
+        const checkDealerCards = () => {
+          const dealerCards = newGameState.dealerCards;
+          const allCardsRevealed = dealerCards.every(card => !card.hidden);
+          
+          if (allCardsRevealed) {
+            resolve(null);
           } else {
-            // Scores are equal, it's a push
-            setGameResult("push")
+            // Check again after a short delay
+            setTimeout(checkDealerCards, 100);
           }
-        }
-
-        // Update game state to game over after determining result
-        setGameState("gameOver")
-
-        // Update balance based on result
-        let newBalance = balance
-        if (
-          gameResult === "playerWin" ||
-          gameResult === "dealerBust" ||
-          gameResult === "blackjack"
-        ) {
-          // Player wins, add bet amount (2x for blackjack)
-          const multiplier = gameResult === "blackjack" ? 2.5 : 2
-          newBalance += bet * multiplier
-        } else if (gameResult === "push") {
-          // Push, return bet amount
-          newBalance += bet
-        }
-        // For dealer win or player bust, bet is already deducted
-
-        setBalance(newBalance)
-      }
+        };
+        checkDealerCards();
+      });
+      
+      setIsResultsVisible(true);
     } catch (error) {
-      console.error("Failed to stand:", error)
-      setMessage("Failed to stand. Please try again.")
-
-      // If we get an error, try to reinitialize the game
-      try {
-        const newGameState = await initializeGame(balance)
-        updateGameStateFromServer(newGameState)
-      } catch (reinitError) {
-        console.error("Failed to reinitialize game:", reinitError)
-      }
+      console.error("Error during dealer turn:", error);
+      setMessage("Error during dealer turn. Please try again.");
     } finally {
-      setIsDealing(false)
+      setIsDealing(false);
     }
   }
 
@@ -375,6 +340,96 @@ export default function BlackjackGame() {
     return () => window.removeEventListener('resize', checkIfMobile)
   }, [])
 
+  // Add a useEffect to watch for animation completion
+  useEffect(() => {
+    // Check if we have all cards and they're not hidden
+    const allCardsRevealed = dealerCards.every(card => !card.hidden) &&
+                            playerCards.every(card => !card.hidden);
+
+    // If all cards are revealed and we're in game over state, show results
+    if (allCardsRevealed && gameState === "gameOver") {
+      setIsResultsVisible(true);
+      setIsAnimating(false);
+    }
+  }, [dealerCards, playerCards, gameState]);
+
+  const Dealer = ({ cards, score, showScore, result = null, playerDrawing = false }: DealerProps) => {
+    const [cardResult, setCardResult] = useState<"win" | "lose" | "push" | null>(null);
+
+    useEffect(() => {
+      if (!result) {
+        setCardResult(null);
+        return;
+      }
+
+      if (result === "playerWin" || result === "bust" || result === "blackjack") {
+        setCardResult("lose");
+      } else if (result === "dealerWin" || result === "dealerBust") {
+        setCardResult("win");
+      } else if (result === "push") {
+        setCardResult("push");
+      }
+    }, [result]);
+
+    // Add dealSequence to cards for animation timing
+    const animatedCards = cards.map((card, index) => ({
+      ...card,
+      dealSequence: index
+    }));
+
+    const handleAnimationComplete = (index: number) => {
+      // Only track animation completion if we're in game over state
+      if (gameState === "gameOver") {
+        // Instead of updating state, just set the ref
+        if (index === cards.length - 1) {
+          animationCompleteRef.current = true;
+        }
+      }
+    };
+
+    // Check if all animations are complete and show results
+    useEffect(() => {
+      if (animationCompleteRef.current && gameState === "gameOver") {
+        // Reset the ref and show results
+        animationCompleteRef.current = false;
+        setIsResultsVisible(true);
+      }
+    }, [gameState]);
+
+    return (
+      <div className="w-full flex flex-col items-center justify-center h-[25%] relative">
+        {/* Score bubble container with fixed height to prevent layout shifts */}
+        <div className="h-8 flex items-center justify-center mb-4">
+          {score > 0 ? (
+            <div className="px-4 py-2 rounded-full text-white text-base font-medium bg-gray-800/80 z-10">
+              {showScore ? score : "?"}
+            </div>
+          ) : (
+            <div className="invisible px-4 py-1 rounded-full text-white text-base font-medium">
+              {/* Placeholder to maintain height */}
+              00
+            </div>
+          )}
+        </div>
+
+        <div className="relative h-[120px] w-full flex items-center justify-center mb-4">
+          {animatedCards.map((card: ClientCardType, index: number) => (
+            <Card
+              key={card.id}
+              card={card}
+              index={index}
+              total={cards.length}
+              isDealer={true}
+              result={cardResult}
+              playerDrawing={playerDrawing}
+              onAnimationComplete={() => handleAnimationComplete(index)}
+            />
+          ))}
+        </div>
+      </div>
+    );
+  };
+
   // Mobile view component
   const MobileView = () => (
     <div className="flex flex-col items-center justify-between w-full h-full bg-gradient-to-b from-gray-900 to-black overflow-hidden relative">
@@ -424,7 +479,7 @@ export default function BlackjackGame() {
           <Banner />
 
           {/* Player section */}
-          <Player cards={playerCards} score={playerScore} result={gameResult} />
+          <Player cards={playerCards} score={playerScore} result={isResultsVisible ? gameResult : null} />
         </div>
 
         {/* Controls */}
@@ -503,7 +558,7 @@ export default function BlackjackGame() {
           <Banner />
 
           {/* Player section */}
-          <Player cards={playerCards} score={playerScore} result={gameResult} />
+          <Player cards={playerCards} score={playerScore} result={isResultsVisible ? gameResult : null} />
         </div>
 
         {/* Controls */}

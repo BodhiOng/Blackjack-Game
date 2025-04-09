@@ -9,9 +9,12 @@ interface DealerProps {
   showScore: boolean
   result?: "playerWin" | "dealerWin" | "push" | "bust" | "dealerBust" | "blackjack" | null
   playerDrawing?: boolean
+  gameState?: string
+  setIsResultsVisible?: (visible: boolean) => void
+  setIsAnimating?: (animating: boolean) => void
 }
 
-export function Dealer({ cards, score, showScore, result = null, playerDrawing = false }: DealerProps) {
+export function Dealer({ cards, score, showScore, result = null, playerDrawing = false, gameState, setIsResultsVisible, setIsAnimating }: DealerProps) {
   const [cardResult, setCardResult] = useState<"win" | "lose" | "push" | null>(null)
 
   useEffect(() => {
@@ -56,10 +59,18 @@ export function Dealer({ cards, score, showScore, result = null, playerDrawing =
             isDealer={true}
             result={cardResult}
             playerDrawing={playerDrawing}
+            onAnimationComplete={() => {
+              if (index === cards.length - 1) {
+                // Last card animation completed
+                if (gameState === "gameOver") {
+                  setIsResultsVisible && setIsResultsVisible(true);
+                  setIsAnimating && setIsAnimating(false);
+                }
+              }
+            }}
           />
         ))}
       </div>
     </div>
   )
 }
-

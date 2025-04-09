@@ -11,6 +11,7 @@ interface CardProps {
   isDealer?: boolean
   result?: "win" | "lose" | "push" | null
   playerDrawing?: boolean
+  onAnimationComplete?: () => void
 }
 
 export default function Card({
@@ -20,6 +21,7 @@ export default function Card({
   isDealer = false,
   result = null,
   playerDrawing = false,
+  onAnimationComplete,
 }: CardProps) {
   const [borderStyle, setBorderStyle] = useState({})
   const [textColor, setTextColor] = useState({})
@@ -126,6 +128,11 @@ export default function Card({
         duration: isDealer && playerDrawing ? 0 : undefined,
         delay: isDealer && playerDrawing ? 0 : animationDelay,
       }}
+      onAnimationComplete={() => {
+        if (onAnimationComplete) {
+          onAnimationComplete();
+        }
+      }}
       className="absolute"
       style={{ zIndex: index }}
     >
@@ -134,7 +141,15 @@ export default function Card({
           className="w-full h-full relative preserve-3d"
           initial={{ rotateY: card.hidden ? 180 : 0 }}
           animate={{ rotateY: card.hidden ? 180 : 0 }}
-          transition={{ duration: 0.5 }}
+          transition={{ 
+            duration: 0.5,
+            delay: isDealer && playerDrawing ? 0 : animationDelay,
+            onComplete: () => {
+              if (onAnimationComplete) {
+                onAnimationComplete();
+              }
+            }
+          }}
         >
           {/* Front of card */}
           <div
@@ -183,4 +198,3 @@ export default function Card({
     </motion.div>
   )
 }
-
