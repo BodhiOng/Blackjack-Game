@@ -141,6 +141,39 @@ export default function BlackjackGame() {
     }
   }
 
+  // Update client state from server response for hit action
+  const updateGameStateFromHit = (gameState: ClientGameState) => {
+    console.log("Updating client state after hit:", gameState)
+    setSessionId(gameState.sessionId)
+    setPlayerCards(gameState.playerCards)
+    setGameState(gameState.gameState)
+    setPreviousBalance(balance)
+    setBalance(gameState.balance)
+    setBet(gameState.bet)
+    setPlayerScore(gameState.playerScore) // Add this line to update player score
+    
+    if (gameState.gameState === "gameOver") {
+      setGameResult(gameState.gameResult)
+      setIsResultsVisible(true)
+    }
+  }
+
+  // Update client state from server response for stand action
+  const updateGameStateFromStand = (gameState: ClientGameState) => {
+    console.log("Updating client state after stand:", gameState)
+    setSessionId(gameState.sessionId)
+    setDealerCards(gameState.dealerCards)
+    setGameState(gameState.gameState)
+    setPreviousBalance(balance)
+    setBalance(gameState.balance)
+    setBet(gameState.bet)
+    
+    if (gameState.gameState === "gameOver") {
+      setGameResult(gameState.gameResult)
+      setIsResultsVisible(true)
+    }
+  }
+
   // Place bet and start game
   const startGame = async (betAmount?: number) => {
     // Use the passed betAmount if provided, otherwise use the state value
@@ -192,38 +225,17 @@ export default function BlackjackGame() {
 
   // Player hits (takes another card)
   const hit = async () => {
-    if (gameState !== "playing") {
-      return
-    }
+    if (isDealing || !sessionId) return
 
     setIsDealing(true)
     setPlayerDrawing(true)
-    setMessage("")
 
     try {
-      const newGameState = await playerHit(sessionId || undefined)
-      updateGameStateFromServer(newGameState)
-
-      // If player busts, show result after a short delay
-      if (newGameState.gameResult === "bust") {
-        setTimeout(() => {
-          setGameResult("bust")
-        }, 1000)
-      }
-      
-      // Reset results visibility after player hit
-      setIsResultsVisible(false)
+      const newGameState = await playerHit(sessionId)
+      updateGameStateFromHit(newGameState)
     } catch (error) {
       console.error("Failed to hit:", error)
       setMessage("Failed to hit. Please try again.")
-
-      // If we get an error, try to reinitialize the game
-      try {
-        const newGameState = await initializeGame(balance)
-        updateGameStateFromServer(newGameState)
-      } catch (reinitError) {
-        console.error("Failed to reinitialize game:", reinitError)
-      }
     } finally {
       setIsDealing(false)
       setPlayerDrawing(false)
@@ -232,40 +244,18 @@ export default function BlackjackGame() {
 
   // Player stands (dealer's turn)
   const stand = async () => {
-    if (gameState !== "playing") return;
+    if (isDealing || !sessionId) return
 
-    setIsDealing(true);
-    setPlayerDrawing(false);
-    setDealerCardsRevealed(0);
+    setIsDealing(true)
 
     try {
-      const newGameState = await playerStand(sessionId!);
-      
-      // Update state but don't show results yet
-      updateGameStateFromServer(newGameState);
-      
-      // Show results after dealer cards are revealed
-      await new Promise(resolve => {
-        const checkDealerCards = () => {
-          const dealerCards = newGameState.dealerCards;
-          const allCardsRevealed = dealerCards.every(card => !card.hidden);
-          
-          if (allCardsRevealed) {
-            resolve(null);
-          } else {
-            // Check again after a short delay
-            setTimeout(checkDealerCards, 100);
-          }
-        };
-        checkDealerCards();
-      });
-      
-      setIsResultsVisible(true);
+      const newGameState = await playerStand(sessionId)
+      updateGameStateFromStand(newGameState)
     } catch (error) {
-      console.error("Error during dealer turn:", error);
-      setMessage("Error during dealer turn. Please try again.");
+      console.error("Failed to stand:", error)
+      setMessage("Failed to stand. Please try again.")
     } finally {
-      setIsDealing(false);
+      setIsDealing(false)
     }
   }
 

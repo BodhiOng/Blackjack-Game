@@ -43,6 +43,7 @@ async function createClientGameState(
   session: GameSession,
   markNewCard = false,
   isInitialDeal = false,
+  hideDealer = false,
 ): Promise<ClientGameState> {
   // Create provably fair data for client
   const provablyFairData = session.provablyFair
@@ -50,17 +51,19 @@ async function createClientGameState(
         gameId: session.provablyFair.gameId,
         clientSeed: session.provablyFair.clientSeed,
         hashedServerSeed: session.provablyFair.hashedServerSeed,
-        // Only reveal server seed if game is completed
         serverSeed: session.provablyFair.completed ? session.provablyFair.serverSeed : null,
         nonce: session.provablyFair.nonce,
         completed: session.provablyFair.completed,
       }
     : undefined
 
-  // Convert cards and calculate scores
-  const dealerCards = await convertToClientCards(session.dealerCards, markNewCard, isInitialDeal, true)
+  // If hideDealer is true, keep existing dealer cards without updating them
+  const dealerCards = hideDealer
+    ? await convertToClientCards(session.dealerCards.map((card) => ({ ...card, hidden: true })), false, false, true)
+    : await convertToClientCards(session.dealerCards, markNewCard, isInitialDeal, true)
+
   const playerCards = await convertToClientCards(session.playerCards, markNewCard, isInitialDeal, false)
-  const dealerScore = await calculateScore(session.dealerCards.map((card) => (card.hidden ? { ...card, hidden: false } : card)))
+  const dealerScore = hideDealer ? 0 : await calculateScore(session.dealerCards.map((card) => (card.hidden ? { ...card, hidden: false } : card)))
   const playerScore = await calculateScore(session.playerCards)
 
   return {
@@ -237,16 +240,15 @@ export async function playerHit(sessionId?: string): Promise<ClientGameState> {
   // Check for bust
   const playerScore = await calculateScore(session.playerCards)
   if (playerScore > 21) {
-    session.gameState = "gameOver"
     session.gameResult = "bust"
-    // No payout needed for bust
+    session.gameState = "gameOver"
   }
 
   await updateSession(session)
   logSessionState("playerHit-after", session)
 
-  // Return the new state with the new card marked for animation
-  return await createClientGameState(session, true)
+  // Return state with dealer cards hidden during player's turn
+  return await createClientGameState(session, true, false, true)
 }
 
 // Player stands (dealer's turn)
