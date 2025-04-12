@@ -85,7 +85,7 @@ export default function BlackjackGame() {
     setPlayerCards(gameState.playerCards)
 
     setGameState(gameState.gameState)
-    
+
     // Track previous balance before updating to new balance
     setPreviousBalance(balance)
     setBalance(gameState.balance)
@@ -104,9 +104,10 @@ export default function BlackjackGame() {
       setLastBet(gameState.bet)
     }
 
+    // Update scores from server
     setDealerScore(gameState.dealerScore)
     setPlayerScore(gameState.playerScore)
-    
+
     // Only update game result if we're in a game over state
     if (gameState.gameState === "gameOver") {
       // Store the result but don't show it yet
@@ -142,35 +143,46 @@ export default function BlackjackGame() {
   }
 
   // Update client state from server response for hit action
-  const updateGameStateFromHit = (gameState: ClientGameState) => {
-    console.log("Updating client state after hit:", gameState)
-    setSessionId(gameState.sessionId)
-    setPlayerCards(gameState.playerCards)
-    setGameState(gameState.gameState)
-    setPreviousBalance(balance)
-    setBalance(gameState.balance)
-    setBet(gameState.bet)
-    setPlayerScore(gameState.playerScore) // Add this line to update player score
-    
-    if (gameState.gameState === "gameOver") {
-      setGameResult(gameState.gameResult)
-      setIsResultsVisible(true)
+  const updateGameStateFromHit = async (gameState: ClientGameState) => {
+    try {
+      console.log("Updating client state after hit:", gameState);
+      setSessionId(gameState.sessionId);
+      setPlayerCards(gameState.playerCards);
+      setGameState(gameState.gameState);
+      setPreviousBalance(balance);
+      setBalance(gameState.balance);
+      setBet(gameState.bet);
+      setPlayerScore(gameState.playerScore);
+      setDealerScore(gameState.dealerScore);
+
+      if (gameState.gameState === "gameOver") {
+        setGameResult(gameState.gameResult);
+        setIsResultsVisible(true);
+      }
+    } catch (error) {
+      console.error("Error updating game state after hit:", error);
+      setMessage("Failed to update game state after hit. Please try again.");
     }
-  }
+  };
 
   // Update client state from server response for stand action
-  const updateGameStateFromStand = (gameState: ClientGameState) => {
-    console.log("Updating client state after stand:", gameState)
-    setSessionId(gameState.sessionId)
-    setDealerCards(gameState.dealerCards)
-    setGameState(gameState.gameState)
-    setPreviousBalance(balance)
-    setBalance(gameState.balance)
-    setBet(gameState.bet)
-    
-    if (gameState.gameState === "gameOver") {
-      setGameResult(gameState.gameResult)
-      setIsResultsVisible(true)
+  const updateGameStateFromStand = async (gameState: ClientGameState) => {
+    try {
+      setSessionId(gameState.sessionId);
+      setDealerCards(gameState.dealerCards);
+      setGameState(gameState.gameState);
+      setPreviousBalance(balance);
+      setBalance(gameState.balance);
+      setGameResult(gameState.gameResult);
+      setPlayerScore(gameState.playerScore);
+      setDealerScore(gameState.dealerScore);
+
+      if (gameState.gameState === "gameOver") {
+        setIsResultsVisible(true)
+      }
+    } catch (error) {
+      console.error("Failed to stand:", error)
+      setMessage("Failed to stand. Please try again.")
     }
   }
 
@@ -178,7 +190,7 @@ export default function BlackjackGame() {
   const startGame = async (betAmount?: number) => {
     // Use the passed betAmount if provided, otherwise use the state value
     const currentBet = betAmount !== undefined ? betAmount : bet
-    
+
     if (currentBet <= 0) {
       setMessage("Please place a bet")
       return
@@ -319,13 +331,13 @@ export default function BlackjackGame() {
     const checkIfMobile = () => {
       setIsMobile(window.innerWidth < 768) // 768px is a common breakpoint for tablets
     }
-    
+
     // Initial check
     checkIfMobile()
-    
+
     // Add event listener for window resize
     window.addEventListener('resize', checkIfMobile)
-    
+
     // Cleanup
     return () => window.removeEventListener('resize', checkIfMobile)
   }, [])
@@ -334,7 +346,7 @@ export default function BlackjackGame() {
   useEffect(() => {
     // Check if we have all cards and they're not hidden
     const allCardsRevealed = dealerCards.every(card => !card.hidden) &&
-                            playerCards.every(card => !card.hidden);
+      playerCards.every(card => !card.hidden);
 
     // If all cards are revealed and we're in game over state, show results
     if (allCardsRevealed && gameState === "gameOver") {

@@ -247,8 +247,7 @@ export async function playerHit(sessionId?: string): Promise<ClientGameState> {
   await updateSession(session)
   logSessionState("playerHit-after", session)
 
-  // Return state with dealer cards hidden during player's turn
-  return await createClientGameState(session, true, false, true)
+  return await createClientGameState(session, true, false, false)
 }
 
 // Player stands (dealer's turn)

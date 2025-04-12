@@ -56,15 +56,15 @@ export async function calculateScore(cards: CardType[]): Promise<number> {
   let aces = 0
 
   for (const card of cards) {
-    if (card.hidden) continue
-
     if (card.rank === "A") {
       aces++
       score += 11
     } else if (["K", "Q", "J"].includes(card.rank)) {
       score += 10
     } else {
-      score += Number.parseInt(card.rank)
+      // Parse the rank as a number, ensuring it's treated as base 10
+      const value = parseInt(card.rank, 10)
+      score += value
     }
   }
 
