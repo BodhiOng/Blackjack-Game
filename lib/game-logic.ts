@@ -77,47 +77,45 @@ export async function calculateScore(cards: CardType[]): Promise<number> {
   return score
 }
 
-// Convert server cards to client cards (hiding information as needed)
+// Convert server cards to client format
 export async function convertToClientCards(
   cards: CardType[],
   markNewCard = false,
   isInitialDeal = false,
-  isDealer = false,
+  hideDealer = false,
 ): Promise<ClientCardType[]> {
-  // If markNewCard is true, only mark the last card as new
-  const result = cards.map((card, index) => {
-    const isLastCard = index === cards.length - 1
+  console.log("[convertToClientCards] Converting cards with params:", {
+    markNewCard,
+    isInitialDeal,
+    hideDealer,
+    cardCount: cards.length,
+    cards: cards.map(c => ({ rank: c.rank, hidden: c.hidden }))
+  })
 
-    // For initial deal, set the deal sequence
-    let dealSequence = undefined
-    if (isInitialDeal) {
-      if (isDealer) {
-        dealSequence = index === 0 ? 0 : 2 // Dealer cards are 1st and 3rd
-      } else {
-        dealSequence = index === 0 ? 1 : 3 // Player cards are 2nd and 4th
-      }
-    }
-
+  return cards.map((card, index) => {
     if (card.hidden) {
+      console.log("[convertToClientCards] Card is hidden:", card)
       return {
         id: uuidv4(),
         hidden: true,
-        isNew: markNewCard && isLastCard,
-        dealSequence,
+        isNew: markNewCard && index === cards.length - 1,
+        isInitialDeal,
       }
     }
 
+    // If hideDealer is true and it's not the first card, hide it
+    const shouldHide = hideDealer && index > 0
+    console.log("[convertToClientCards] Card visibility check:", { index, hideDealer, shouldHide })
+
     return {
       id: uuidv4(),
-      hidden: false,
       suit: card.suit,
       rank: card.rank,
-      isNew: markNewCard && isLastCard,
-      dealSequence,
+      hidden: shouldHide,
+      isNew: markNewCard && index === cards.length - 1,
+      isInitialDeal,
     }
   })
-
-  return result
 }
 
 // Determine game result

@@ -45,22 +45,29 @@ async function createClientGameState(
   isInitialDeal = false,
   hideDealer = false,
 ): Promise<ClientGameState> {
+  console.log("[createClientGameState] Creating state with params:", {
+    markNewCard,
+    isInitialDeal,
+    hideDealer,
+    gameState: session.gameState,
+    gameResult: session.gameResult
+  })
+
   // Create provably fair data for client
   const provablyFairData = session.provablyFair
     ? {
         gameId: session.provablyFair.gameId,
         clientSeed: session.provablyFair.clientSeed,
         hashedServerSeed: session.provablyFair.hashedServerSeed,
-        serverSeed: session.provablyFair.completed ? session.provablyFair.serverSeed : null,
+        serverSeed: session.provablyFair.completed ? session.provablyFair.serverSeed : undefined,
         nonce: session.provablyFair.nonce,
         completed: session.provablyFair.completed,
       }
     : undefined
 
-  // If hideDealer is true, keep existing dealer cards without updating them
-  const dealerCards = hideDealer
-    ? await convertToClientCards(session.dealerCards.map((card) => ({ ...card, hidden: true })), false, false, true)
-    : await convertToClientCards(session.dealerCards, markNewCard, isInitialDeal, true)
+  // Convert dealer cards to client format
+  const dealerCards = await convertToClientCards(session.dealerCards, markNewCard, isInitialDeal, hideDealer)
+  console.log("[createClientGameState] Dealer cards after conversion:", dealerCards.map(c => ({ rank: c.rank, hidden: c.hidden })))
 
   const playerCards = await convertToClientCards(session.playerCards, markNewCard, isInitialDeal, false)
   const dealerScore = hideDealer ? 0 : await calculateScore(session.dealerCards.map((card) => (card.hidden ? { ...card, hidden: false } : card)))
@@ -185,18 +192,21 @@ export async function placeBet(bet: number, sessionId?: string): Promise<ClientG
     session.deck = regularDeck
   }
 
-  // Deal initial cards
-  session.dealerCards = [
-    session.deck.pop()!,
-    { ...session.deck.pop()!, hidden: true }, // Second dealer card is hidden
-  ]
-  session.playerCards = [session.deck.pop()!, session.deck.pop()!]
-
-  // Update game state
-  session.gameState = "playing"
+  // Place initial bet and deal cards
   session.bet = bet
   session.balance -= bet
+  session.gameState = "playing"
   session.gameResult = null
+
+  // Deal initial cards
+  session.dealerCards = [
+    { ...session.deck.pop()!, hidden: false }, // First dealer card visible
+    { ...session.deck.pop()!, hidden: true },  // Second dealer card hidden
+  ]
+  session.playerCards = [
+    { ...session.deck.pop()!, hidden: false },
+    { ...session.deck.pop()!, hidden: false },
+  ]
 
   await updateSession(session)
   logSessionState("placeBet-after", session)
@@ -235,11 +245,17 @@ export async function playerHit(sessionId?: string): Promise<ClientGameState> {
 
   // Draw a card
   const newCard = session.deck.pop()!
-  session.playerCards.push(newCard)
+  // Ensure hidden is explicitly set to false for player cards
+  session.playerCards.push({ ...newCard, hidden: false })
 
   // Check for bust
   const playerScore = await calculateScore(session.playerCards)
+  console.log("[playerHit] Player score:", playerScore)
+  
   if (playerScore > 21) {
+    console.log("[playerHit] Player busted, revealing dealer cards")
+    // Reveal all dealer cards on bust
+    session.dealerCards = session.dealerCards.map(card => ({ ...card, hidden: false }))
     session.gameResult = "bust"
     session.gameState = "gameOver"
   }

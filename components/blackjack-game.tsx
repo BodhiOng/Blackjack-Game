@@ -156,6 +156,8 @@ export default function BlackjackGame() {
       setDealerScore(gameState.dealerScore);
 
       if (gameState.gameState === "gameOver") {
+        // Update dealer cards before showing game result
+        setDealerCards(gameState.dealerCards);
         setGameResult(gameState.gameResult);
         setIsResultsVisible(true);
       }
