@@ -10,7 +10,7 @@ import {
   calculatePayout,
 } from "@/lib/game-logic"
 import { generateSeed, hashSeed } from "@/lib/provably-fair"
-import type { ClientGameState, GameSession, ProvablyFairData } from "@/lib/types"
+import type { ClientGameState, GameSession, ProvablyFairData, GameResult } from "@/lib/types"
 import { v4 as uuidv4 } from "uuid"
 import { cookies } from "next/headers"
 
@@ -69,6 +69,20 @@ async function createClientGameState(
     gameResult: session.gameResult,
     message: "",
     provablyFair: provablyFairData,
+  }
+}
+
+// Update balance based on game result
+async function updateBalance(session: GameSession, bet: number, result: GameResult) {
+  // First subtract the bet (since it was already taken when placing the bet)
+  session.balance -= bet
+  
+  // Then add the payout
+  session.balance += calculatePayout(bet, result)
+  
+  // Ensure balance doesn't go negative
+  if (session.balance < 0) {
+    session.balance = 0
   }
 }
 
@@ -180,14 +194,14 @@ export async function placeBet(bet: number, sessionId?: string): Promise<ClientG
   if (bet <= 0) {
     return {
       ...(await createClientGameState(session)),
-      message: "Please place a bet",
+      message: "Bet must be greater than 0",
     }
   }
 
   if (bet > session.balance) {
     return {
       ...(await createClientGameState(session)),
-      message: "You don't have enough balance for this bet",
+      message: "Insufficient balance",
     }
   }
 
@@ -226,10 +240,10 @@ export async function placeBet(bet: number, sessionId?: string): Promise<ClientG
 
     if (dealerScore === 21) {
       session.gameResult = "push"
-      session.balance += bet // Return bet on push
+      await updateBalance(session, bet, "push")
     } else {
       session.gameResult = "blackjack"
-      session.balance += calculatePayout(bet, "blackjack")
+      await updateBalance(session, bet, "blackjack")
     }
 
     session.gameState = "gameOver"
@@ -298,6 +312,9 @@ export async function playerHit(sessionId?: string): Promise<ClientGameState> {
   if (playerScore > 21) {
     session.gameResult = "bust"
     session.gameState = "gameOver"
+
+    // Update balance based on result
+    await updateBalance(session, session.bet, "bust")
 
     // Mark the game as completed for provably fair verification
     if (session.provablyFair) {
@@ -385,9 +402,7 @@ export async function playerStand(sessionId?: string): Promise<ClientGameState> 
   session.gameState = "gameOver"
 
   // Update balance based on result
-  if (session.gameResult !== "dealerWin" && session.gameResult !== "bust") {
-    session.balance += calculatePayout(session.bet, session.gameResult)
-  }
+  await updateBalance(session, session.bet, session.gameResult)
 
   // Mark the game as completed for provably fair verification
   if (session.provablyFair) {
@@ -468,4 +483,3 @@ export async function newRound(sessionId?: string): Promise<ClientGameState> {
     bet: currentBet, // This helps the client remember the last bet
   }
 }
-

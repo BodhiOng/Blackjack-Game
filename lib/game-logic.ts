@@ -153,6 +153,7 @@ export function determineGameResult(playerCards: CardType[], dealerCards: CardTy
 export function calculatePayout(bet: number, result: GameResult): number {
   switch (result) {
     case "playerWin":
+      return bet * 2 // 1:1 payout
     case "dealerBust":
       return bet * 2 // 1:1 payout
     case "push":
@@ -163,4 +164,3 @@ export function calculatePayout(bet: number, result: GameResult): number {
       return 0 // Player loses
   }
 }
-
