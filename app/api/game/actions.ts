@@ -59,7 +59,7 @@ async function createClientGameState(
 
   return {
     sessionId: session.id,
-    dealerCards: convertToClientCards(session.dealerCards, markNewCard, isInitialDeal, true),
+    dealerCards: convertToClientCards(session.dealerCards, true, isInitialDeal, true),
     playerCards: convertToClientCards(session.playerCards, markNewCard, isInitialDeal, false),
     gameState: session.gameState,
     balance: session.balance,

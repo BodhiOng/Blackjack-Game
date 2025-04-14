@@ -84,7 +84,7 @@ export function convertToClientCards(
 ): ClientCardType[] {
   // If markNewCard is true, only mark the last card as new
   const result = cards.map((card, index) => {
-    const isLastCard = index === cards.length - 1
+    const isDealerCardAboveSecond = isDealer && index > 1
 
     // For initial deal, set the deal sequence
     let dealSequence = undefined
@@ -100,7 +100,7 @@ export function convertToClientCards(
       return {
         id: uuidv4(),
         hidden: true,
-        isNew: markNewCard && isLastCard,
+        isNew: false,
         dealSequence,
       }
     }
@@ -110,7 +110,7 @@ export function convertToClientCards(
       hidden: false,
       suit: card.suit,
       rank: card.rank,
-      isNew: markNewCard && isLastCard,
+      isNew: isDealerCardAboveSecond,
       dealSequence,
     }
   })
