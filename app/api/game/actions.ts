@@ -74,9 +74,6 @@ async function createClientGameState(
 
 // Initialize a new game
 export async function initializeGame(initialBalance = 1000): Promise<ClientGameState> {
-  // Clear any existing session
-  cookies().delete("blackjack_session")
-
   // Create provably fair data
   const gameId = uuidv4()
   const serverSeed = generateSeed(32)

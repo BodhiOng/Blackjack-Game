@@ -354,8 +354,8 @@ export default function BlackjackGame() {
   }
 
   return (
-    <div className="flex flex-col items-center justify-between w-full max-w-3xl bg-black rounded-xl shadow-2xl overflow-hidden h-full relative">
-      <div className="w-full flex flex-col items-center justify-between p-4 relative h-full">
+    <div className="flex flex-col items-center justify-between w-full min-h-[600px] max-h-screen overflow-hidden relative px-2 sm:px-4 md:max-w-3xl mx-auto">
+      <div className="w-full flex flex-col items-center justify-between p-2 sm:p-4 relative h-full">
         {/* Balance display at the top */}
         <BalanceDisplay balance={balance} />
 
@@ -366,7 +366,7 @@ export default function BlackjackGame() {
               initial={{ opacity: 0, y: -20 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0 }}
-              className="absolute top-4 left-1/2 transform -translate-x-1/2 z-50 bg-black/80 text-white px-6 py-3 rounded-full font-bold text-lg"
+              className="absolute top-4 left-1/2 transform -translate-x-1/2 z-50 bg-black/80 text-white px-4 sm:px-6 py-2 sm:py-3 rounded-full font-bold text-base sm:text-lg text-center max-w-[90vw] sm:max-w-none"
             >
               {message}
             </motion.div>
@@ -374,7 +374,7 @@ export default function BlackjackGame() {
         </AnimatePresence>
 
         {/* Fixed height container for the game area to prevent layout shifts */}
-        <div className="w-full flex flex-col items-center justify-between flex-grow">
+        <div className="w-full flex flex-col items-center justify-between flex-grow gap-4">
           {/* Dealer section */}
           <Dealer
             cards={dealerCards}
@@ -392,22 +392,27 @@ export default function BlackjackGame() {
         </div>
 
         {/* Controls */}
-        {gameState === "betting" || gameState === "gameOver" ? (
-          <BetControls
-            bet={bet}
-            setBet={handleBetChange}
-            balance={balance}
-            onStartGame={startGame}
-            isDealing={isDealing}
-            isPostGame={gameState === "gameOver"}
-          />
-        ) : (
-          <Controls onHit={hit} onStand={stand} isDealing={isDealing} />
-        )}
-      </div>
+        <div className="w-full mt-4">
+          {gameState === "betting" || gameState === "gameOver" ? (
+            <BetControls
+              bet={bet}
+              setBet={handleBetChange}
+              balance={balance}
+              onStartGame={startGame}
+              isDealing={isDealing}
+              isPostGame={gameState === "gameOver"}
+            />
+          ) : (
+            <Controls onHit={hit} onStand={stand} isDealing={isDealing} />
+          )}
+        </div>
 
-      {/* Provably Fair Button */}
-      <ProvablyFairButton onClick={toggleProvablyFairModal} />
+        {/* Provably Fair Button */}
+        <div className="w-full mt-4 flex justify-end">
+          <ProvablyFairButton onClick={toggleProvablyFairModal} />
+        </div>
+
+      </div>
 
       {/* Provably Fair Modal */}
       <ProvablyFairModal
@@ -418,4 +423,3 @@ export default function BlackjackGame() {
     </div>
   )
 }
-

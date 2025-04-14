@@ -42,7 +42,7 @@ export function Player({ cards, score, result }: PlayerProps) {
       </div>
 
       {/* Score bubble container with fixed height to prevent layout shifts */}
-      <div className="h-8 flex items-center justify-center mt-2 mb-4">
+      <div className="h-8 flex items-center justify-center mt-4 mb-4">
         {score > 0 ? (
           <div className={`px-4 py-1 rounded-full text-white text-base font-medium ${bubbleStyle}`}>{score}</div>
         ) : (

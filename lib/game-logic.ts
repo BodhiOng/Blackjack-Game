@@ -1,5 +1,3 @@
-"use server"
-
 import type { CardType, ClientCardType, GameResult, Suit, Rank } from "./types"
 import { v4 as uuidv4 } from "uuid"
 import { generateShuffledDeck as generateProvablyFairDeck } from "./provably-fair"

@@ -1,5 +1,3 @@
-"use server"
-
 // Simple hash function for demonstration purposes
 // In a production environment, use a proper cryptographic library
 export function generateSeed(length = 16): string {
