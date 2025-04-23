@@ -237,9 +237,8 @@ export default function BlackjackGame() {
 
       // Step 4: Check if the game is over (blackjack, bust, etc.)
       if (newGameState.gameState === "gameOver") {
-        updateGameStateFromServer(newGameState)
-        setIsDealing(false)
-        return
+        // Continue with animations before showing results
+        await new Promise((resolve) => setTimeout(resolve, 800))
       }
 
       // Step 5: If dealer needs to draw more cards (score < 17)
