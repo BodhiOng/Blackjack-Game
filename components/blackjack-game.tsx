@@ -390,25 +390,28 @@ export default function BlackjackGame() {
           <Player cards={playerCards} score={playerScore} result={gameResult} />
         </div>
 
-        {/* Controls */}
-        <div className="w-full mt-4">
-          {gameState === "betting" || gameState === "gameOver" ? (
-            <BetControls
-              bet={bet}
-              setBet={handleBetChange}
-              balance={balance}
-              onStartGame={startGame}
-              isDealing={isDealing}
-              isPostGame={gameState === "gameOver"}
-            />
-          ) : (
-            <Controls onHit={hit} onStand={stand} isDealing={isDealing} />
-          )}
-        </div>
-
-        {/* Provably Fair Button */}
-        <div className="w-full mt-4 flex justify-end">
-          <ProvablyFairButton onClick={toggleProvablyFairModal} />
+        {/* Controls and Provably Fair Button */}
+        <div className="w-full mt-4 space-y-4">
+          {/* Game Controls */}
+          <div className="w-full">
+            {gameState === "betting" || gameState === "gameOver" ? (
+              <BetControls
+                bet={bet}
+                setBet={handleBetChange}
+                balance={balance}
+                onStartGame={startGame}
+                isDealing={isDealing}
+                isPostGame={gameState === "gameOver"}
+              />
+            ) : (
+              <Controls onHit={hit} onStand={stand} isDealing={isDealing} />
+            )}
+          </div>
+          
+          {/* Provably Fair Button - More visible positioning */}
+          <div className="w-full flex justify-center sm:justify-end">
+            <ProvablyFairButton onClick={toggleProvablyFairModal} />
+          </div>
         </div>
 
       </div>
