@@ -18,6 +18,11 @@ interface ProvablyFairModalProps {
 
 // Client-side hash function for verification
 function clientHashSeed(seed: string): string {
+  if (typeof window === 'undefined') {
+    // Return a placeholder during server-side rendering
+    return ''.padStart(64, '0')
+  }
+  
   let hash = 0
   for (let i = 0; i < seed.length; i++) {
     const char = seed.charCodeAt(i)
@@ -36,8 +41,12 @@ export function ProvablyFairModal({ isOpen, onClose, gameData }: ProvablyFairMod
   const [activeTab, setActiveTab] = useState<"about" | "verify">("about")
   const [verificationResult, setVerificationResult] = useState<boolean | null>(null)
   const [copied, setCopied] = useState<string | null>(null)
+  const [isClient, setIsClient] = useState(false)
 
   useEffect(() => {
+    // Set isClient to true once component mounts on the client
+    setIsClient(true)
+    
     if (!isOpen) {
       // Reset state when modal closes
       setActiveTab("about")
@@ -50,7 +59,8 @@ export function ProvablyFairModal({ isOpen, onClose, gameData }: ProvablyFairMod
     if (!gameData || !gameData.serverSeed) return
 
     // Client-side verification
-    const hashedServerSeed = clientHashSeed(gameData.serverSeed)
+    const serverSeed = gameData.serverSeed || ''
+    const hashedServerSeed = clientHashSeed(serverSeed)
     const result = hashedServerSeed === gameData.hashedServerSeed
     setVerificationResult(result)
   }
@@ -166,9 +176,9 @@ export function ProvablyFairModal({ isOpen, onClose, gameData }: ProvablyFairMod
                       <div>
                         <label className="block text-gray-400 text-xs mb-1">Revealed Server Seed</label>
                         <div className="flex items-center bg-gray-800 rounded p-2">
-                          <span className="text-white text-sm truncate flex-1">{gameData.serverSeed}</span>
+                          <span className="text-white text-sm truncate flex-1">{gameData.serverSeed || ''}</span>
                           <button
-                            onClick={() => copyToClipboard(gameData.serverSeed, "serverSeed")}
+                            onClick={() => copyToClipboard(gameData.serverSeed || '', "serverSeed")}
                             className="text-gray-400 hover:text-white ml-2"
                           >
                             {copied === "serverSeed" ? (
@@ -215,8 +225,8 @@ export function ProvablyFairModal({ isOpen, onClose, gameData }: ProvablyFairMod
                           </div>
                           <p className="text-xs mt-1 text-gray-300">
                             {verificationResult
-                              ? `Hash of "${gameData.serverSeed}" matches the hashed server seed.`
-                              : `Hash of "${gameData.serverSeed}" does not match the hashed server seed.`}
+                              ? `Hash of "${gameData.serverSeed || ''}" matches the hashed server seed.`
+                              : `Hash of "${gameData.serverSeed || ''}" does not match the hashed server seed.`}
                           </p>
                         </div>
                       )}
@@ -248,8 +258,8 @@ export function ProvablyFairModal({ isOpen, onClose, gameData }: ProvablyFairMod
             <ExternalLink size={14} className="ml-1" />
           </a>
 
-          {activeTab === "verify" && gameData?.completed && gameData?.serverSeed && (
-            <div className="text-xs text-gray-400">Hash: {clientHashSeed(gameData.serverSeed).substring(0, 8)}...</div>
+          {activeTab === "verify" && gameData?.completed && gameData?.serverSeed && isClient && (
+            <div className="text-xs text-gray-400">Hash: {clientHashSeed(gameData.serverSeed || '').substring(0, 8)}...</div>
           )}
         </div>
       </div>
